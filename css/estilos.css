@@ -50,29 +50,56 @@ body {
 /* =====================================================
    HEADER / ENCABEZADO
    ===================================================== */
+/* =====================================================
+   HEADER CORREGIDO (CENTRADO ABSOLUTO)
+   ===================================================== */
 .header {
     background: rgba(17, 26, 36, 0.85);
     backdrop-filter: blur(16px);
-    /* Borde inferior con degradado dinámico */
     border-bottom: 2px solid transparent;
     border-image: linear-gradient(to right, var(--accent-green), var(--accent-yellow)) 1;
     height: 75px;
     display: flex;
     align-items: center;
     padding: 0 30px;
-    position: sticky;
-    top: 0;
+    position: relative !important; /* Necesario para referenciar el centro */
     z-index: 10;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+}
+
+/* Fuerza el título de la institución al centro exacto */
+.header-center {
+    position: absolute !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    text-align: center;
+    pointer-events: none;
+}
+
+.header-center h2 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 800;
+    background: linear-gradient(to right, var(--accent-green), var(--accent-yellow));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    white-space: nowrap;
 }
 
 .header-logo {
     width: 46px;
     height: 46px;
     border-radius: 14px;
-    object-fit: cover; /* Mantiene la proporción de la imagen sin deformarla */
+    object-fit: cover;
     margin-right: 15px;
     box-shadow: 0 0 15px var(--accent-green-glow);
-    border: 1px solid var(--border-color); /* Opcional: añade un marco sutil */
+    border: 1px solid var(--border-color);
 }
 
 .header-text h1 {

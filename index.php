@@ -351,17 +351,24 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["pregunta"])) {
                         $contexto .= $resultado["articulo"] . "\n\n";
                     }
 
-                    $respuesta = consultarGemini($pregunta, $contexto);
+                   // CÓDIGO NUEVO
+try {
+    $respuesta = consultarGemini($pregunta, $contexto);
 
-                    $stmt = $conexion->prepare(
-                        "INSERT INTO conversaciones (pregunta, respuesta) VALUES (?, ?)"
-                    );
+    // Guardar en la base de datos solo si Gemini responde con éxito
+    $stmt = $conexion->prepare(
+        "INSERT INTO conversaciones (pregunta, respuesta) VALUES (?, ?)"
+    );
 
-                    if ($stmt) {
-                        $stmt->bind_param("ss", $pregunta, $respuesta);
-                        $stmt->execute();
-                        $stmt->close();
-                    }
+    if ($stmt) {
+        $stmt->bind_param("ss", $pregunta, $respuesta);
+        $stmt->execute();
+        $stmt->close();
+    }
+} catch (Exception $e) {
+    // Si la API falla (HTTP 503 u otro error), asignamos el mensaje a $error
+    $error = "El servicio de Gemini está experimentando alta demanda en este momento. Por favor, intenta de nuevo en unos segundos.";
+}
                 } else {
                     $error = "No encontré información relacionada con tu pregunta dentro del Manual de Convivencia.";
                 }
@@ -384,12 +391,21 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["pregunta"])) {
 
 <div class="app">
     <header class="header">
-        
-     <img src="logo2.png" alt="Logo Manual de Convivencia" class="header-logo">
+    <div class="header-left">
+        <img src="logo2.png" alt="Logo" class="header-logo">
         <div class="header-text">
             <h1>GaraBOT</h1>
-            <p>Asistente Virtual con IA (Gemini)</p>
+            <p>ASISTENTE VIRTUAL CON IA (GEMINI)</p>
         </div>
+    </div>
+
+    <div class="header-center">
+        <h2>I.E.D Carlos Garavito Acosta de Gachancipá</h2>
+    </div>
+</header>
+
+    <!-- ESPACIADOR INVISIBLE PARA MANTENER EL CENTRADO PERFECTO -->
+    <div class="header-right"></div>
     </header>
 
     <main class="chat-container">

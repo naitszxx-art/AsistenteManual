@@ -98,7 +98,7 @@ if ($GOOGLE_API_KEY === false || trim($GOOGLE_API_KEY) === '') {
 $GEMINI_MODEL = getenv('GEMINI_MODEL') ?: 'gemini-3.5-flash';
 
 /**
- * Consulta Google Gemini.
+ * Consulta Google Gemini con sistema de reintentos automáticos para errores temporales (HTTP 503 / 429).
  *
  * @param string $prompt Pregunta/instrucción que se enviará a Gemini.
  * @param string|null $systemInstruction Instrucción opcional para definir el comportamiento.
@@ -147,64 +147,86 @@ function consultarGemini(
         );
     }
 
-    $ch = curl_init($url);
+    // Configuración de reintentos
+    $maxIntentos = 3;
+    $esperaSegundos = 2;
 
-    if ($ch === false) {
-        throw new RuntimeException(
-            'No fue posible inicializar cURL.'
-        );
-    }
+    for ($intento = 1; $intento <= $maxIntentos; $intento++) {
+        $ch = curl_init($url);
 
-    curl_setopt_array($ch, [
-        CURLOPT_POST           => true,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER     => [
-            'Content-Type: application/json',
-            'x-goog-api-key: ' . $GOOGLE_API_KEY
-        ],
-        CURLOPT_POSTFIELDS     => $payload,
-        CURLOPT_CONNECTTIMEOUT => 10,
-        CURLOPT_TIMEOUT        => 60
-    ]);
+        if ($ch === false) {
+            throw new RuntimeException(
+                'No fue posible inicializar cURL.'
+            );
+        }
 
-    $respuesta = curl_exec($ch);
-    $codigoHttp = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $errorCurl = curl_error($ch);
+        curl_setopt_array($ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_HTTPHEADER     => [
+                'Content-Type: application/json',
+                'x-goog-api-key: ' . $GOOGLE_API_KEY
+            ],
+            CURLOPT_POSTFIELDS     => $payload,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_TIMEOUT        => 60
+        ]);
 
-    curl_close($ch);
+        $respuesta = curl_exec($ch);
+        $codigoHttp = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $errorCurl = curl_error($ch);
 
-    if ($respuesta === false) {
-        throw new RuntimeException(
-            'Error de conexión con Google Gemini: ' . $errorCurl
-        );
-    }
+        curl_close($ch);
 
-    $datos = json_decode($respuesta, true);
+        if ($respuesta === false) {
+            if ($intento < $maxIntentos) {
+                sleep($esperaSegundos);
+                continue;
+            }
+            throw new RuntimeException(
+                'Error de conexión con Google Gemini: ' . $errorCurl
+            );
+        }
 
-    if (!is_array($datos)) {
-        throw new RuntimeException(
-            'Gemini devolvió una respuesta que no tiene formato JSON válido.'
-        );
-    }
+        $datos = json_decode($respuesta, true);
 
-    if ($codigoHttp < 200 || $codigoHttp >= 300) {
-        $mensaje = $datos['error']['message']
-            ?? 'Error desconocido de Google Gemini.';
+        if (!is_array($datos)) {
+            if ($intento < $maxIntentos) {
+                sleep($esperaSegundos);
+                continue;
+            }
+            throw new RuntimeException(
+                'Gemini devolvió una respuesta que no tiene formato JSON válido.'
+            );
+        }
 
+        // Si la respuesta fue exitosa (200 OK)
+        if ($codigoHttp >= 200 && $codigoHttp < 300) {
+            $texto = $datos['candidates'][0]['content']['parts'][0]['text'] ?? null;
+
+            if (!is_string($texto) || trim($texto) === '') {
+                throw new RuntimeException(
+                    'Gemini no devolvió contenido de texto.'
+                );
+            }
+
+            return trim($texto);
+        }
+
+        // Si es un error de saturación (503) o límite de tasa (429), se reintenta
+        if (($codigoHttp === 503 || $codigoHttp === 429) && $intento < $maxIntentos) {
+            sleep($esperaSegundos);
+            $esperaSegundos *= 2; // Incrementa el tiempo de espera gradualmente
+            continue;
+        }
+
+        // Para cualquier otro error permanente
+        $mensaje = $datos['error']['message'] ?? 'Error desconocido de Google Gemini.';
         throw new RuntimeException(
             'Error de Gemini (HTTP ' . $codigoHttp . '): ' . $mensaje
         );
     }
 
-    $texto = $datos['candidates'][0]['content']['parts'][0]['text']
-        ?? null;
-
-    if (!is_string($texto) || trim($texto) === '') {
-        throw new RuntimeException(
-            'Gemini no devolvió contenido de texto.'
-        );
-    }
-
-    return trim($texto);
+    throw new RuntimeException('No fue posible comunicarse con Gemini tras varios intentos.');
 }
 ?>
